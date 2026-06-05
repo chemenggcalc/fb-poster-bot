@@ -1,0 +1,112 @@
+[
+  {
+    "timestamp": "2026-06-04T17:44:37.983Z",
+    "status": "dry-run",
+    "articleTitle": "Interactive McCabe-Thiele Diagram Generator for Binary Distillation",
+    "articleUrl": "https://chemenggcalc.com/mccabe-thiele-diagram-calculator-distillation/",
+    "message": "Dry run completed successfully. Post was generated but not published."
+  },
+  {
+    "timestamp": "2026-06-04T17:49:02.367Z",
+    "status": "success",
+    "articleTitle": "Calculate Pipe and Fittings Pressure Losses in Piping System",
+    "articleUrl": "https://chemenggcalc.com/calculate-pipe-and-fittings-pressure-losses/",
+    "postId": "671765686009391_122184677240796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-04T17:52:20.592Z",
+    "status": "success",
+    "articleTitle": "Vessel Volume Calculator for Ellipsoidal, Hemispherical, Horispherical & Flat Head Type",
+    "articleUrl": "https://chemenggcalc.com/vessel-volume-calculator-head-types/",
+    "postId": "671765686009391_122184677528796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-04T17:56:19.199Z",
+    "status": "success",
+    "articleTitle": "Interactive McCabe-Thiele Diagram Generator for Binary Distillation",
+    "articleUrl": "https://chemenggcalc.com/mccabe-thiele-diagram-calculator-distillation/",
+    "postId": "671765686009391_122184677990796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-04T18:34:25.745Z",
+    "status": "success",
+    "articleTitle": "Steam Table Calculator based on IAPWS-IF97 Properties – All 5 Regions Included",
+    "articleUrl": "https://chemenggcalc.com/steam-table-calculator-iapws-if97-properties/",
+    "postId": "671765686009391_122184680114796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-04T18:38:12.163Z",
+    "status": "success",
+    "articleTitle": "Gas Laws Calculator – Ideal Gas (PV=nRT), Boyle’s, Charles’s, Avogadro’s, Gay-Lussac’s",
+    "articleUrl": "https://chemenggcalc.com/ideal-gas-law-calculator-boyles-charles-avogadros/",
+    "postId": "671765686009391_122184680354796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-04T19:02:40.495Z",
+    "status": "warning",
+    "message": "No articles scraped from website."
+  },
+  {
+    "timestamp": "2026-06-04T19:07:50.013Z",
+    "status": "success",
+    "articleTitle": "New Crystalline Material Breaks 30-Year Limit for CO2 Carbon Capture",
+    "articleUrl": "https://chemenggcalc.com/a-molecule-engineered-to-choose-co2/",
+    "postId": "671765686009391_122184682106796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-05T08:30:39.710Z",
+    "status": "warning",
+    "message": "No articles scraped from website."
+  },
+  {
+    "timestamp": "2026-06-05T08:33:35.570Z",
+    "status": "error",
+    "message": "Facebook API Error: Confirm your identity before you can publish as this Page. Open the Facebook app on your phone and follow the instructions."
+  },
+  {
+    "timestamp": "2026-06-05T08:36:59.106Z",
+    "status": "success",
+    "articleTitle": "Ponchon-Savarit Diagram Calculator for Binary Distillation – Interactive Tool",
+    "articleUrl": "https://chemenggcalc.com/ponchon-savarit-diagram-calculator-distillation/",
+    "postId": "671765686009391_122184735362796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-05T13:45:14.016Z",
+    "status": "success",
+    "articleTitle": "Scientists Turn Plastic Waste and Dead Battery Acid Into H2 Fuel Using Sunlight",
+    "articleUrl": "https://chemenggcalc.com/plastic-waste-and-dead-battery-acid-into-h2-fuel/",
+    "postId": "671765686009391_122184762590796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-05T14:43:08.809Z",
+    "status": "success",
+    "articleTitle": "Vessel Head Calculator for Surface Area, Blank Size, Volume & Weight",
+    "articleUrl": "https://chemenggcalc.com/vessel-head-calculator-surface-area-blank-size/",
+    "postId": "671765686009391_122184767144796471",
+    "message": "Post successfully published to Facebook Page."
+  },
+  {
+<<<<<<< HEAD
+    "timestamp": "2026-06-05T15:11:12.227Z",
+    "status": "dry-run",
+    "articleTitle": "Centrifugal Pump Sizing Calculation - TDH, NPSHa vs Flow Rate curve & Power Required",
+    "articleUrl": "https://chemenggcalc.com/centrifugal-pump-sizing-calculation/",
+    "message": "Dry run completed successfully. Post was generated but not published."
+=======
+    "timestamp": "2026-06-05T15:21:13.982Z",
+    "status": "success",
+    "articleTitle": "How AI and Self-Driving Labs are Transforming Chemical Engineering in 2026",
+    "articleUrl": "https://chemenggcalc.com/ai-is-transforming-chemical-engineering/",
+    "postId": "671765686009391_122184769778796471",
+    "message": "Post successfully published to Facebook Page."
+>>>>>>> 661e1608d3def89057219fe7f61e65985c7ad84f
+  }
+]

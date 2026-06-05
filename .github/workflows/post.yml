@@ -1,0 +1,44 @@
+name: Daily Facebook Poster
+
+on:
+  schedule:
+    # 9:10 PM IST is 3:40 PM UTC (15:40)
+    - cron: '40 15 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to commit database changes back to the repository
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Suppresses GitHub Actions Node 20 deprecation warning
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run poster script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          RSS_FEED_URL: ${{ secrets.RSS_FEED_URL }}
+          WEBSITE_URL: ${{ secrets.WEBSITE_URL }}
+          RESET_POSTING_HISTORY_WHEN_EXHAUSTED: true
+        run: node scheduler.js --run-now
+
+      - name: Commit & push history database changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/posted_articles.json data/logs.json || true
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update posted articles database [skip ci]" && git push)

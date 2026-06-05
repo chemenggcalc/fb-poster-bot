@@ -1,0 +1,19 @@
+{
+  "name": "fb-automated-poster",
+  "version": "1.0.0",
+  "description": "An automated service that fetches website articles randomly, generates Facebook posts with Gemini, and publishes them with images.",
+  "main": "scheduler.js",
+  "type": "module",
+  "scripts": {
+    "start": "node scheduler.js",
+    "test": "node scheduler.js --run-now"
+  },
+  "dependencies": {
+    "@google/genai": "^2.7.0",
+    "axios": "^1.7.2",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "rss-parser": "^3.13.0"
+  }
+}
