@@ -11,5 +11,10 @@
     "articleUrl": "https://chemenggcalc.com/process-engineer-interview-questions/",
     "postId": "671765686009391_122184781286796471",
     "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-05T20:48:55.934Z",
+    "status": "error",
+    "message": "Could not fetch post URLs from any source (REST API, Sitemap, or RSS Feed)."
   }
 ]
