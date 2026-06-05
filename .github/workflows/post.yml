@@ -2,17 +2,16 @@ name: Daily Facebook Poster
 
 on:
   schedule:
-    # 10:25 PM IST is 4:55 PM UTC (16:55)
-    - cron: '55 16 * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+    - cron: '20 17 * * *'
+  workflow_dispatch:
 
 jobs:
   post:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Required to commit database changes back to the repository
+      contents: write
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Suppresses GitHub Actions Node 20 deprecation warning
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,7 +35,7 @@ jobs:
           RESET_POSTING_HISTORY_WHEN_EXHAUSTED: true
         run: node scheduler.js --run-now
 
-      - name: Commit & push history database changes
+      - name: Commit and push history database changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
