@@ -3,5 +3,13 @@
     "timestamp": "2026-06-05T17:55:14.502Z",
     "status": "error",
     "message": "Could not fetch post URLs from any source (REST API, Sitemap, or RSS Feed)."
+  },
+  {
+    "timestamp": "2026-06-05T17:57:52.554Z",
+    "status": "success",
+    "articleTitle": "Top 20 Process Engineer Interview Questions with Answers (2025 updated)",
+    "articleUrl": "https://chemenggcalc.com/process-engineer-interview-questions/",
+    "postId": "671765686009391_122184781286796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
