@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { config, validateConfig } from './config.js';
-import { getSitemapUrls, scrapeArticleDetails } from './scraper.js';
+import { getAllPostUrls, scrapeArticleDetails } from './scraper.js';
 import { generateFacebookPost } from './geminiService.js';
 import { publishToFacebook } from './facebookService.js';
 import { getPostedArticles, markAsPosted, clearPostedArticles, addLog } from './db.js';
@@ -21,8 +21,8 @@ async function runJob(dryRun = false) {
       throw new Error('Invalid configuration. Check your environment variables in .env');
     }
 
-    // 1. Fetch website article URLs from sitemaps
-    const articleUrls = await getSitemapUrls();
+    // 1. Fetch website article URLs (tries WP REST API -> Sitemap -> RSS Feed)
+    const articleUrls = await getAllPostUrls();
     if (!articleUrls || articleUrls.length === 0) {
       console.log('[Job] No articles found on the website.');
       addLog({ status: 'warning', message: 'No article URLs retrieved from sitemaps.' });

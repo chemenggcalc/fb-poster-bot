@@ -11,11 +11,65 @@ const SCRAPE_HEADERS = {
 };
 
 /**
- * Parses WordPress sitemaps and returns all post URLs.
+ * Method 1: Fetch all post URLs using WordPress REST API (most reliable from cloud servers).
+ * WordPress REST API is rarely blocked by Cloudflare since it's designed for programmatic access.
  * @returns {Promise<Array<string>>}
  */
-export async function getSitemapUrls() {
-  const wpBaseUrl = config.websiteUrl ? config.websiteUrl.replace(/\/$/, '') : 'https://chemenggcalc.com';
+async function getUrlsFromWpApi() {
+  const wpBaseUrl = (config.websiteUrl || 'https://chemenggcalc.com').replace(/\/$/, '');
+  const allUrls = [];
+  let page = 1;
+  const perPage = 100;
+
+  console.log('[Scraper] Trying WordPress REST API...');
+
+  while (true) {
+    try {
+      const apiUrl = `${wpBaseUrl}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&_fields=link`;
+      console.log(`[Scraper] Fetching REST API page ${page}: ${apiUrl}`);
+      
+      const res = await axios.get(apiUrl, {
+        headers: SCRAPE_HEADERS,
+        timeout: 15000
+      });
+
+      if (!res.data || !Array.isArray(res.data) || res.data.length === 0) {
+        break;
+      }
+
+      for (const post of res.data) {
+        if (post.link) {
+          allUrls.push(post.link);
+        }
+      }
+
+      // Check if there are more pages
+      const totalPages = parseInt(res.headers['x-wp-totalpages'] || '1', 10);
+      if (page >= totalPages) {
+        break;
+      }
+      page++;
+    } catch (e) {
+      if (page === 1) {
+        console.warn(`[Scraper Warning] WordPress REST API failed: ${e.message}`);
+        return []; // Return empty to trigger fallback
+      }
+      break; // We got some URLs, stop pagination
+    }
+  }
+
+  if (allUrls.length > 0) {
+    console.log(`[Scraper] Found ${allUrls.length} post URLs from WordPress REST API.`);
+  }
+  return allUrls;
+}
+
+/**
+ * Method 2: Parse WordPress sitemaps (works well from local PC, may be blocked by Cloudflare on cloud).
+ * @returns {Promise<Array<string>>}
+ */
+async function getUrlsFromSitemap() {
+  const wpBaseUrl = (config.websiteUrl || 'https://chemenggcalc.com').replace(/\/$/, '');
   const sitemapCandidates = [
     `${wpBaseUrl}/post-sitemap.xml`,
     `${wpBaseUrl}/sitemap_index.xml`,
@@ -43,7 +97,7 @@ export async function getSitemapUrls() {
           const loc = $(el).find('loc').text().trim();
           if (loc && loc.toLowerCase().includes('post')) {
             postSitemapUrl = loc;
-            return false; // break loop
+            return false;
           }
         });
         
@@ -73,14 +127,63 @@ export async function getSitemapUrls() {
         break;
       }
     } catch (e) {
-      console.warn(`[Scraper Warning] Failed parsing sitemap ${sitemapUrl}:`, e.message);
+      console.warn(`[Scraper Warning] Failed parsing sitemap ${sitemapUrl}: ${e.message}`);
     }
   }
 
-  if (postUrls.length === 0) {
-    throw new Error('Could not find post URLs in any sitemap.');
-  }
   return postUrls;
+}
+
+/**
+ * Method 3: Fetch post URLs from RSS feed (fallback).
+ * @returns {Promise<Array<string>>}
+ */
+async function getUrlsFromRSS() {
+  const rssFeedUrl = config.rssFeedUrl || `${(config.websiteUrl || 'https://chemenggcalc.com').replace(/\/$/, '')}/feed`;
+  
+  console.log(`[Scraper] Trying RSS feed: ${rssFeedUrl}`);
+  try {
+    const res = await axios.get(rssFeedUrl, {
+      headers: SCRAPE_HEADERS,
+      timeout: 15000
+    });
+
+    const $ = cheerio.load(res.data, { xmlMode: true });
+    const urls = [];
+    $('item link').each((_, el) => {
+      const link = $(el).text().trim();
+      if (link) urls.push(link);
+    });
+
+    if (urls.length > 0) {
+      console.log(`[Scraper] Found ${urls.length} post URLs from RSS feed.`);
+    }
+    return urls;
+  } catch (e) {
+    console.warn(`[Scraper Warning] RSS feed failed: ${e.message}`);
+    return [];
+  }
+}
+
+/**
+ * Main function to get all post URLs using multiple methods with fallbacks.
+ * Priority: WordPress REST API -> Sitemap XML -> RSS Feed
+ * @returns {Promise<Array<string>>}
+ */
+export async function getAllPostUrls() {
+  // Method 1: WordPress REST API (most reliable from cloud)
+  let urls = await getUrlsFromWpApi();
+  if (urls.length > 0) return urls;
+
+  // Method 2: Sitemap XML (works locally, may be blocked by Cloudflare on cloud)
+  urls = await getUrlsFromSitemap();
+  if (urls.length > 0) return urls;
+
+  // Method 3: RSS Feed (limited to recent posts but always works)
+  urls = await getUrlsFromRSS();
+  if (urls.length > 0) return urls;
+
+  throw new Error('Could not fetch post URLs from any source (REST API, Sitemap, or RSS Feed).');
 }
 
 /**
@@ -123,7 +226,6 @@ export async function scrapeArticleDetails(articleUrl) {
     let imageUrl = null;
     const ogImg = $('meta[property="og:image"]').attr('content') || $('meta[name="twitter:image"]').attr('content');
     
-    // Check if it's a real WP image upload
     if (ogImg && ogImg.includes('wp-content/uploads/')) {
       imageUrl = ogImg;
     }
@@ -133,7 +235,7 @@ export async function scrapeArticleDetails(articleUrl) {
         const src = $(el).attr('src');
         if (src && src.includes('wp-content/uploads/') && !src.startsWith('data:')) {
           imageUrl = src;
-          return false; // break loop
+          return false;
         }
       });
     }
