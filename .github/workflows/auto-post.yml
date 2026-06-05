@@ -1,8 +1,8 @@
-name: Daily Facebook Poster
+name: Auto Post to Facebook
 
 on:
   schedule:
-    - cron: '20 17 * * *'
+    - cron: '50 17 * * *'
   workflow_dispatch:
 
 jobs:
