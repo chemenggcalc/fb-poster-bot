@@ -2,8 +2,8 @@ name: Daily Facebook Poster
 
 on:
   schedule:
-    # 9:26 PM IST is 3:56 PM UTC (15:56)
-    - cron: '56 15 * * *'
+    # 10:25 PM IST is 4:55 PM UTC (16:55)
+    - cron: '55 16 * * *'
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
 jobs:
