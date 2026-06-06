@@ -2,8 +2,7 @@ name: Auto Post to Facebook
 
 on:
   schedule:
-    # AUTOMATION: Triggers automatically every 5 minutes for testing
-    - cron: '50 17 * * * *'
+    - cron: '50 17 * * *'
   workflow_dispatch:
 
 jobs:
@@ -37,15 +36,6 @@ jobs:
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
           RESET_POSTING_HISTORY_WHEN_EXHAUSTED: true
         run: node scheduler.js --run-now
-
-      - name: Commit and push history database changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/posted_articles.json data/logs.json || true
-          
-          # Removed [skip ci] so it no longer suppresses or breaks the next scheduled cron run
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update posted articles database" && git push)
 
       - name: Commit and push history database changes
         run: |
