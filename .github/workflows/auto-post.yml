@@ -33,6 +33,8 @@ jobs:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           RSS_FEED_URL: ${{ secrets.RSS_FEED_URL }}
           WEBSITE_URL: ${{ secrets.WEBSITE_URL }}
+          SYSTEM_INSTRUCTION: ${{ secrets.SYSTEM_INSTRUCTION }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
           RESET_POSTING_HISTORY_WHEN_EXHAUSTED: true
         run: node scheduler.js --run-now
 

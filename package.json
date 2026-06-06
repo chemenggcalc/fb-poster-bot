@@ -6,14 +6,13 @@
   "type": "module",
   "scripts": {
     "start": "node scheduler.js",
-    "test": "node scheduler.js --run-now"
+    "test": "node scheduler.js --dry-run"
   },
   "dependencies": {
     "@google/genai": "^2.7.0",
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
-    "node-cron": "^3.0.3",
-    "rss-parser": "^3.13.0"
+    "node-cron": "^3.0.3"
   }
 }
