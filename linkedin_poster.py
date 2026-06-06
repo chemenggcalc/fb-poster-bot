@@ -17,17 +17,62 @@ os.makedirs("data", exist_ok=True)
 
 # Browser-like headers to bypass Cloudflare
 SCRAPE_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
     'Referer': 'https://chemenggcalc.com/',
     'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-User': '?1',
+    'Cache-Control': 'max-age=0',
 }
 
 # Fetch credentials from environment
 LINKEDIN_ACCESS_TOKEN = os.environ.get('LINKEDIN_ACCESS_TOKEN')
 LINKEDIN_COMPANY_ID   = os.environ.get('LINKEDIN_ORG_ID')
 GEMINI_API_KEY        = os.environ.get('GEMINI_API_KEY')
+
+
+# ==========================================
+# HELPERS
+# ==========================================
+def fetch_with_retry(url, max_retries=3):
+    """Fetch a URL with retry logic and delays between attempts."""
+    delays = [3, 6, 10]  # seconds between retries
+    for attempt in range(1, max_retries + 1):
+        try:
+            res = requests.get(url, headers=SCRAPE_HEADERS, timeout=20)
+            if res.status_code == 200:
+                return res
+            print(f"  -> Attempt {attempt}/{max_retries} got status {res.status_code}")
+        except Exception as e:
+            print(f"  -> Attempt {attempt}/{max_retries} failed: {e}")
+
+        if attempt < max_retries:
+            wait = delays[attempt - 1] if attempt - 1 < len(delays) else 5
+            print(f"  -> Waiting {wait}s before retry...")
+            time.sleep(wait)
+
+    # Final attempt — raise on failure
+    res = requests.get(url, headers=SCRAPE_HEADERS, timeout=20)
+    res.raise_for_status()
+    return res
+
+
+def prewarm_connection():
+    """Visit the homepage first to pass initial Cloudflare checks."""
+    print("Pre-warming connection by visiting homepage...")
+    try:
+        requests.get(WP_BASE_URL, headers=SCRAPE_HEADERS, timeout=15)
+        print("Homepage visited successfully.")
+    except Exception as e:
+        print(f"Homepage pre-warm returned {e} — continuing anyway.")
+    time.sleep(2)
+
 
 # ==========================================
 # GEMINI SETUP
@@ -48,7 +93,10 @@ def get_gemini_model():
 # STEP 1 — GET ALL POST URLs FROM SITEMAP
 # ==========================================
 def get_all_post_urls():
-    """Parse WordPress sitemaps and return all post URLs."""
+    """Parse WordPress sitemaps and return all post URLs with retry logic."""
+    # Pre-warm connection first
+    prewarm_connection()
+
     sitemap_candidates = [
         f"{WP_BASE_URL}/post-sitemap.xml",
         f"{WP_BASE_URL}/sitemap_index.xml",
@@ -59,10 +107,7 @@ def get_all_post_urls():
     for sitemap_url in sitemap_candidates:
         print(f"Trying sitemap: {sitemap_url}")
         try:
-            res = requests.get(sitemap_url, headers=SCRAPE_HEADERS, timeout=15)
-            if res.status_code != 200:
-                print(f"  -> Not found ({res.status_code}), trying next...")
-                continue
+            res = fetch_with_retry(sitemap_url)
 
             soup = BeautifulSoup(res.content, 'lxml-xml')
 
@@ -74,7 +119,8 @@ def get_all_post_urls():
                     loc = s.find('loc')
                     if loc and 'post' in loc.text.lower():
                         print(f"  -> Post sitemap: {loc.text}")
-                        sub_res = requests.get(loc.text, headers=SCRAPE_HEADERS, timeout=15)
+                        time.sleep(2)  # Delay before fetching child sitemap
+                        sub_res = fetch_with_retry(loc.text)
                         sub_soup = BeautifulSoup(sub_res.content, 'lxml-xml')
                         post_urls = [u.text.strip() for u in sub_soup.find_all('loc')]
                         break
@@ -89,6 +135,8 @@ def get_all_post_urls():
                 break
         except Exception as e:
             print(f"  -> Error fetching sitemap {sitemap_url}: {e}")
+        # Delay before trying the next sitemap
+        time.sleep(3)
 
     if not post_urls:
         raise Exception("Could not find post URLs in any sitemap.")

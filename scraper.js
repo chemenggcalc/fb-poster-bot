@@ -3,16 +3,84 @@ import * as cheerio from 'cheerio';
 import { config } from './config.js';
 
 const SCRAPE_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
   'Referer': config.websiteUrl || 'https://chemenggcalc.com/',
   'Connection': 'keep-alive',
+  'Upgrade-Insecure-Requests': '1',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'same-origin',
+  'Sec-Fetch-User': '?1',
+  'Cache-Control': 'max-age=0',
 };
 
 /**
+ * Helper: sleep for given milliseconds
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Helper: Fetch a URL with retry logic and delays between attempts.
+ * Retries up to `maxRetries` times with increasing delays to handle Cloudflare throttling.
+ * @param {string} url - URL to fetch
+ * @param {object} options - Axios options
+ * @param {number} maxRetries - Max retry attempts (default 3)
+ * @returns {Promise<object>} - Axios response
+ */
+async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+  const delays = [3000, 6000, 10000]; // 3s, 6s, 10s between retries
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await axios.get(url, {
+        headers: SCRAPE_HEADERS,
+        timeout: 20000,
+        ...options,
+      });
+      return res;
+    } catch (error) {
+      const status = error.response?.status;
+      console.warn(`[Scraper] Attempt ${attempt}/${maxRetries} failed for ${url} (${status || error.message})`);
+
+      if (attempt < maxRetries) {
+        const waitTime = delays[attempt - 1] || 5000;
+        console.log(`[Scraper] Waiting ${waitTime / 1000}s before retry...`);
+        await sleep(waitTime);
+      } else {
+        throw error; // All retries exhausted
+      }
+    }
+  }
+}
+
+/**
+ * Pre-warm: Visit the homepage first to establish a "session" and pass initial Cloudflare checks.
+ * Some Cloudflare setups allow subsequent requests after the first one passes.
+ */
+async function prewarmConnection() {
+  const wpBaseUrl = (config.websiteUrl || 'https://chemenggcalc.com').replace(/\/$/, '');
+  console.log('[Scraper] Pre-warming connection by visiting homepage...');
+  try {
+    await axios.get(wpBaseUrl, {
+      headers: SCRAPE_HEADERS,
+      timeout: 15000,
+    });
+    console.log('[Scraper] Homepage visited successfully.');
+  } catch (e) {
+    console.warn(`[Scraper] Homepage pre-warm returned ${e.response?.status || e.message} — continuing anyway.`);
+  }
+  // Small delay after pre-warm
+  await sleep(2000);
+}
+
+/**
  * Method 1: Fetch all post URLs using WordPress REST API (most reliable from cloud servers).
- * WordPress REST API is rarely blocked by Cloudflare since it's designed for programmatic access.
+ * WordPress REST API is designed for programmatic access.
  * @returns {Promise<Array<string>>}
  */
 async function getUrlsFromWpApi() {
@@ -28,10 +96,7 @@ async function getUrlsFromWpApi() {
       const apiUrl = `${wpBaseUrl}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&_fields=link`;
       console.log(`[Scraper] Fetching REST API page ${page}: ${apiUrl}`);
       
-      const res = await axios.get(apiUrl, {
-        headers: SCRAPE_HEADERS,
-        timeout: 15000
-      });
+      const res = await fetchWithRetry(apiUrl);
 
       if (!res.data || !Array.isArray(res.data) || res.data.length === 0) {
         break;
@@ -49,9 +114,10 @@ async function getUrlsFromWpApi() {
         break;
       }
       page++;
+      await sleep(1000); // Small delay between pagination requests
     } catch (e) {
       if (page === 1) {
-        console.warn(`[Scraper Warning] WordPress REST API failed: ${e.message}`);
+        console.warn(`[Scraper Warning] WordPress REST API failed after retries: ${e.message}`);
         return []; // Return empty to trigger fallback
       }
       break; // We got some URLs, stop pagination
@@ -81,10 +147,7 @@ async function getUrlsFromSitemap() {
   for (const sitemapUrl of sitemapCandidates) {
     console.log(`[Scraper] Trying sitemap: ${sitemapUrl}`);
     try {
-      const res = await axios.get(sitemapUrl, {
-        headers: SCRAPE_HEADERS,
-        timeout: 15000
-      });
+      const res = await fetchWithRetry(sitemapUrl);
       
       const $ = cheerio.load(res.data, { xmlMode: true });
 
@@ -103,7 +166,8 @@ async function getUrlsFromSitemap() {
         
         if (postSitemapUrl) {
           console.log(`[Scraper] Fetching post sitemap: ${postSitemapUrl}`);
-          const subRes = await axios.get(postSitemapUrl, { headers: SCRAPE_HEADERS, timeout: 15000 });
+          await sleep(2000); // Delay before fetching child sitemap
+          const subRes = await fetchWithRetry(postSitemapUrl);
           const sub$ = cheerio.load(subRes.data, { xmlMode: true });
           sub$('loc').each((_, el) => {
             const locText = sub$(el).text().trim();
@@ -129,6 +193,8 @@ async function getUrlsFromSitemap() {
     } catch (e) {
       console.warn(`[Scraper Warning] Failed parsing sitemap ${sitemapUrl}: ${e.message}`);
     }
+    // Delay before trying the next sitemap candidate
+    await sleep(3000);
   }
 
   return postUrls;
@@ -143,10 +209,7 @@ async function getUrlsFromRSS() {
   
   console.log(`[Scraper] Trying RSS feed: ${rssFeedUrl}`);
   try {
-    const res = await axios.get(rssFeedUrl, {
-      headers: SCRAPE_HEADERS,
-      timeout: 15000
-    });
+    const res = await fetchWithRetry(rssFeedUrl);
 
     const $ = cheerio.load(res.data, { xmlMode: true });
     const urls = [];
@@ -160,24 +223,34 @@ async function getUrlsFromRSS() {
     }
     return urls;
   } catch (e) {
-    console.warn(`[Scraper Warning] RSS feed failed: ${e.message}`);
+    console.warn(`[Scraper Warning] RSS feed failed after retries: ${e.message}`);
     return [];
   }
 }
 
 /**
  * Main function to get all post URLs using multiple methods with fallbacks.
- * Priority: WordPress REST API -> Sitemap XML -> RSS Feed
+ * Pre-warms the connection first, then tries: WordPress REST API -> Sitemap XML -> RSS Feed
+ * Each method has built-in retry logic with delays to handle Cloudflare rate limiting.
  * @returns {Promise<Array<string>>}
  */
 export async function getAllPostUrls() {
+  // Pre-warm: visit homepage to pass initial Cloudflare challenge
+  await prewarmConnection();
+
   // Method 1: WordPress REST API (most reliable from cloud)
   let urls = await getUrlsFromWpApi();
   if (urls.length > 0) return urls;
 
-  // Method 2: Sitemap XML (works locally, may be blocked by Cloudflare on cloud)
+  console.log('[Scraper] REST API failed. Waiting 5s before trying sitemaps...');
+  await sleep(5000);
+
+  // Method 2: Sitemap XML
   urls = await getUrlsFromSitemap();
   if (urls.length > 0) return urls;
+
+  console.log('[Scraper] Sitemaps failed. Waiting 5s before trying RSS feed...');
+  await sleep(5000);
 
   // Method 3: RSS Feed (limited to recent posts but always works)
   urls = await getUrlsFromRSS();
@@ -195,10 +268,7 @@ export async function scrapeArticleDetails(articleUrl) {
   console.log(`[Scraper] Scraping details for selected article: ${articleUrl}`);
   
   try {
-    const res = await axios.get(articleUrl, {
-      headers: SCRAPE_HEADERS,
-      timeout: 15000
-    });
+    const res = await fetchWithRetry(articleUrl);
     
     const $ = cheerio.load(res.data);
     
