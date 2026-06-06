@@ -1,3 +1,12 @@
+import sys
+
+# Force UTF-8 stdout on Windows to prevent terminal print crashes with emojis/formulas
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import requests
 from bs4 import BeautifulSoup
 import google.generativeai as genai
@@ -5,6 +14,29 @@ import random
 import time
 import json
 import os
+
+# ==========================================
+# ENVIRONMENT LOADER
+# ==========================================
+def load_env():
+    """Manually load environmental variables from .env file if it exists."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if os.path.exists(env_path):
+        print("Loading environment variables from .env file...")
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' in line:
+                    parts = line.split('=', 1)
+                    key = parts[0].strip()
+                    val = parts[1].strip().strip("'\"")
+                    if key not in os.environ:
+                        os.environ[key] = val
+
+# Load environmental variables
+load_env()
 
 # ==========================================
 # CONFIGURATION
@@ -20,7 +52,7 @@ SCRAPE_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
+    'Accept-Encoding': 'gzip, deflate',
     'Referer': 'https://chemenggcalc.com/',
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
@@ -40,6 +72,17 @@ GEMINI_API_KEY        = os.environ.get('GEMINI_API_KEY')
 # ==========================================
 # HELPERS
 # ==========================================
+def detect_cloudflare(html_content):
+    """Detect if the content is a Cloudflare challenge page."""
+    html_lower = html_content.lower()
+    # Check for common challenge hallmarks
+    if "challenge-platform" in html_lower or "cf-challenge" in html_lower or "cf_challenge" in html_lower:
+        return True
+    if "cloudflare" in html_lower and ("please enable cookies" in html_lower or "turn on javascript" in html_lower or "enable javascript" in html_lower):
+        return True
+    return False
+
+
 def fetch_with_retry(url, max_retries=3):
     """Fetch a URL with retry logic and delays between attempts."""
     delays = [3, 6, 10]  # seconds between retries
@@ -47,6 +90,8 @@ def fetch_with_retry(url, max_retries=3):
         try:
             res = requests.get(url, headers=SCRAPE_HEADERS, timeout=20)
             if res.status_code == 200:
+                if detect_cloudflare(res.text):
+                    raise Exception("Cloudflare challenge/blocking page detected (status 200)")
                 return res
             print(f"  -> Attempt {attempt}/{max_retries} got status {res.status_code}")
         except Exception as e:
@@ -59,6 +104,8 @@ def fetch_with_retry(url, max_retries=3):
 
     # Final attempt — raise on failure
     res = requests.get(url, headers=SCRAPE_HEADERS, timeout=20)
+    if res.status_code == 200 and detect_cloudflare(res.text):
+        raise Exception("Cloudflare challenge/blocking page detected on final attempt")
     res.raise_for_status()
     return res
 
@@ -90,13 +137,52 @@ def get_gemini_model():
 
 
 # ==========================================
-# STEP 1 — GET ALL POST URLs FROM SITEMAP
+# STEP 1 — GET ALL POST URLs FROM SOURCES
 # ==========================================
-def get_all_post_urls():
-    """Parse WordPress sitemaps and return all post URLs with retry logic."""
-    # Pre-warm connection first
-    prewarm_connection()
+def get_urls_from_wp_api():
+    """Fetch post URLs using WordPress REST API."""
+    print("Trying WordPress REST API...")
+    all_urls = []
+    page = 1
+    per_page = 100
+    while True:
+        api_url = f"{WP_BASE_URL}/wp-json/wp/v2/posts?per_page={per_page}&page={page}&_fields=link"
+        print(f"  -> Fetching REST API page {page}: {api_url}")
+        try:
+            res = fetch_with_retry(api_url)
+            # Check if it's JSON
+            if 'application/json' not in res.headers.get('Content-Type', '').lower():
+                print(f"  -> Expected JSON but got Content-Type: {res.headers.get('Content-Type')}")
+                return []
+            
+            data = res.json()
+            if not isinstance(data, list) or len(data) == 0:
+                break
+            
+            for post in data:
+                if isinstance(post, dict) and 'link' in post:
+                    all_urls.append(post['link'])
+            
+            # Check headers for pagination
+            total_pages = int(res.headers.get('X-WP-TotalPages', 1))
+            if page >= total_pages:
+                break
+            page += 1
+            time.sleep(1)
+        except Exception as e:
+            print(f"  -> REST API failed on page {page}: {e}")
+            if page == 1:
+                return []
+            break
+            
+    if all_urls:
+        print(f"  -> Found {len(all_urls)} post URLs from WordPress REST API.")
+    return all_urls
 
+
+def get_urls_from_sitemaps():
+    """Parse WordPress sitemaps and return all post URLs with retry logic."""
+    print("Trying XML sitemaps...")
     sitemap_candidates = [
         f"{WP_BASE_URL}/post-sitemap.xml",
         f"{WP_BASE_URL}/sitemap_index.xml",
@@ -108,6 +194,10 @@ def get_all_post_urls():
         print(f"Trying sitemap: {sitemap_url}")
         try:
             res = fetch_with_retry(sitemap_url)
+            content_type = res.headers.get('Content-Type', '').lower()
+            if 'html' in content_type:
+                print("  -> Warning: Received HTML instead of XML sitemap.")
+                continue
 
             soup = BeautifulSoup(res.content, 'lxml-xml')
 
@@ -121,6 +211,10 @@ def get_all_post_urls():
                         print(f"  -> Post sitemap: {loc.text}")
                         time.sleep(2)  # Delay before fetching child sitemap
                         sub_res = fetch_with_retry(loc.text)
+                        sub_content_type = sub_res.headers.get('Content-Type', '').lower()
+                        if 'html' in sub_content_type:
+                            print("  -> Warning: Received HTML instead of child XML sitemap.")
+                            continue
                         sub_soup = BeautifulSoup(sub_res.content, 'lxml-xml')
                         post_urls = [u.text.strip() for u in sub_soup.find_all('loc')]
                         break
@@ -138,9 +232,63 @@ def get_all_post_urls():
         # Delay before trying the next sitemap
         time.sleep(3)
 
-    if not post_urls:
-        raise Exception("Could not find post URLs in any sitemap.")
     return post_urls
+
+
+def get_urls_from_rss():
+    """Fetch post URLs from RSS feed."""
+    rss_feed_url = f"{WP_BASE_URL}/feed"
+    print(f"Trying RSS feed: {rss_feed_url}")
+    try:
+        res = fetch_with_retry(rss_feed_url)
+        content_type = res.headers.get('Content-Type', '').lower()
+        if 'html' in content_type:
+            print("  -> Warning: Received HTML instead of RSS feed XML.")
+            return []
+        
+        soup = BeautifulSoup(res.content, 'lxml-xml')
+        items = soup.find_all('item')
+        urls = []
+        for item in items:
+            link_tag = item.find('link')
+            if link_tag and link_tag.text.strip():
+                urls.append(link_tag.text.strip())
+        
+        if urls:
+            print(f"  -> Found {len(urls)} post URLs from RSS feed.")
+        return urls
+    except Exception as e:
+        print(f"  -> RSS feed failed: {e}")
+        return []
+
+
+def get_all_post_urls():
+    """Get all post URLs with multiple fallbacks: WP REST API -> Sitemap XML -> RSS Feed."""
+    # Pre-warm connection first
+    prewarm_connection()
+
+    # Method 1: WordPress REST API (most reliable on Cloudflare)
+    urls = get_urls_from_wp_api()
+    if urls:
+        return urls
+
+    print("REST API failed. Waiting 5s before trying sitemaps...")
+    time.sleep(5)
+
+    # Method 2: Sitemap XML
+    urls = get_urls_from_sitemaps()
+    if urls:
+        return urls
+
+    print("Sitemaps failed. Waiting 5s before trying RSS feed...")
+    time.sleep(5)
+
+    # Method 3: RSS Feed
+    urls = get_urls_from_rss()
+    if urls:
+        return urls
+
+    raise Exception("Could not fetch post URLs from any source (WP REST API, Sitemap, or RSS Feed).")
 
 
 def fetch_random_article():
@@ -175,9 +323,9 @@ def fetch_random_article():
         print(f"\nSelected URL (attempt {attempt+1}): {article_url}")
 
         try:
-            res = requests.get(article_url, headers=SCRAPE_HEADERS, timeout=15)
-            if res.status_code != 200:
-                print(f"  -> Could not fetch page ({res.status_code}), retrying...")
+            res = fetch_with_retry(article_url)
+            if detect_cloudflare(res.text):
+                print("  -> Cloudflare challenge/blocking page detected on article, skipping...")
                 continue
 
             soup = BeautifulSoup(res.content, 'lxml')
@@ -368,8 +516,14 @@ def create_linkedin_post(access_token, company_id, post_text, image_urn=None):
 # ==========================================
 def main():
     try:
-        if not GEMINI_API_KEY or not LINKEDIN_ACCESS_TOKEN or not LINKEDIN_COMPANY_ID:
-            raise Exception("Missing credentials! Verify GEMINI_API_KEY, LINKEDIN_ACCESS_TOKEN, and LINKEDIN_ORG_ID in environment.")
+        is_dry_run = '--dry-run' in sys.argv
+
+        if is_dry_run:
+            if not GEMINI_API_KEY:
+                raise Exception("Missing GEMINI_API_KEY in environment for dry run.")
+        else:
+            if not GEMINI_API_KEY or not LINKEDIN_ACCESS_TOKEN or not LINKEDIN_COMPANY_ID:
+                raise Exception("Missing credentials! Verify GEMINI_API_KEY, LINKEDIN_ACCESS_TOKEN, and LINKEDIN_ORG_ID in environment.")
 
         # 1. Init Gemini
         model = get_gemini_model()
@@ -392,6 +546,18 @@ def main():
             print(f"Featured Image: {featured_image}")
         else:
             print("No featured image found — will post text only.")
+
+        # Check for dry run
+        if is_dry_run:
+            print("\n===== DRY RUN - POST DETAILS =====")
+            print(f"Target Org ID: {LINKEDIN_COMPANY_ID or 'Not Configured (Dry Run)'}")
+            print(f"Image URL:     {featured_image or 'None (Will post text only)'}")
+            print(f"Article Link:  {article_url}")
+            print("--- Generated LinkedIn Caption ---")
+            print(post_text)
+            print("==================================\n")
+            print("Dry run completed successfully. Post was generated but not published.")
+            return
 
         # 4. Bypasses prompt if running in automated environment
         is_automated = 'GITHUB_ACTIONS' in os.environ
