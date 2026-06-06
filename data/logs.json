@@ -156,5 +156,10 @@
     "articleUrl": "https://chemenggcalc.com/antoine-equation-calculator-for-vapour-pressure/",
     "postId": "671765686009391_122184859118796471",
     "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-06T16:36:57.979Z",
+    "status": "error",
+    "message": "Could not fetch post URLs from any source (REST API, Sitemap, or RSS Feed)."
   }
 ]
