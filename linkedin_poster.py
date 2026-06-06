@@ -181,63 +181,41 @@ def generate_linkedin_post(title, topic, full_text, article_url, model):
     prompt = f"""
 You are a social media manager for 'ChemEnggCalc', a chemical engineering tools & resources company.
 
-Write a LinkedIn post based on the article below. Follow the EXACT structure and formatting rules.
+Write a LinkedIn post based on the article below.
 
 Article Title: {title}
 Article Summary: {topic}
-Article Full Content (use this to find formulas and key calculations): {full_text}
-Article URL: {article_url}
+Article Full Content (use for formulas): {full_text}
 
-===== STRICT FORMAT RULES =====
+===== POST STRUCTURE =====
 
-1. OPENING LINE (1 line):
-   - Hook chemical engineers with a relatable problem they face daily.
-   - Use 1-2 emojis. NO bold, NO asterisks.
+1. OPENING HOOK (1 line): A relatable problem for chemical engineers. Use 1-2 emojis.
 
-2. (blank line)
+2. PROBLEM (2-3 short lines): The engineering pain point.
 
-3. PROBLEM SECTION (2-3 short lines):
-   - Describe the engineering pain point. One idea per line.
+3. SOLUTION (2-3 short lines): What the article/calculator solves.
 
-4. (blank line)
+4. THE FORMULA (2 lines): Find any formula from the article content. Write it in plain text (e.g. "Q = m x Cp x delta-T"). Briefly explain symbols. If no formula, mention the key method. Start with "The Formula:"
 
-5. SOLUTION SECTION (2-3 short lines):
-   - Explain what the article/calculator solves, concisely.
+5. KEY TAKEAWAYS (3 bullet points using "-"): Under 12 words each.
 
-6. (blank line)
+6. HASHTAGS (1 line, 5-6 tags): e.g. #ChemicalEngineering #ChemEnggCalc #ProcessEngineering
 
-7. THE FORMULA (2-3 lines):
-   - Scan the article content for any engineering formula or equation.
-   - Write it in plain readable text. Example: "Q = m x Cp x delta-T" or "Re = rho x v x D / mu"
-   - Briefly explain what each symbol means in 1 line.
-   - If no specific formula exists, mention the key numerical method or approach used.
-   - Start this section with: "The Formula:"
-
-8. (blank line)
-
-9. KEY TAKEAWAYS (3 bullet points using "-"):
-   - Each bullet on its own line, under 12 words each.
-
-10. (blank line)
-
-11. CALL TO ACTION (2 lines):
-    - Line 1: "Read the full article here 👇"
-    - Line 2: The exact URL: {article_url}
-
-12. (blank line)
-
-13. HASHTAGS (1 line, 5-6 tags):
-    e.g. #ChemicalEngineering #ChemEnggCalc #ProcessEngineering
-
-===== TEXT RULES =====
-- Total post: 220-300 words MAX.
+===== RULES =====
+- 150-200 words MAX. Keep it concise.
 - NO markdown: no **bold**, no *italic*, no ```code```.
-- NO placeholder text.
-- Plain text only. Emojis for emphasis instead of formatting.
-- Put a blank line between EVERY section.
+- Plain text only. Use emojis for emphasis.
+- Put a blank line between every section.
+- Do NOT include any call-to-action or article URL (it will be added automatically).
+- Do NOT add any placeholder text.
+- COMPLETE the entire post — do not cut off mid-sentence.
 """
     response = model.generate_content(prompt)
     post_text = response.text.strip()
+
+    # Clean up any markdown formatting that Gemini might add
+    post_text = post_text.replace('**', '')
+
     if len(post_text) > 2800:
         print(f"Warning: Post is {len(post_text)} chars — may be truncated by LinkedIn.")
     return post_text
@@ -353,6 +331,10 @@ def main():
 
         # 3. Generate LinkedIn post text (with formula)
         post_text = generate_linkedin_post(title, topic, full_text, article_url, model)
+
+        # 4. Prepend article URL to the first line (like Facebook posts)
+        if article_url and article_url not in post_text:
+            post_text = f"Read here: {article_url}\n\n{post_text}"
 
         print("\n========== GENERATED POST ==========")
         print(post_text)
