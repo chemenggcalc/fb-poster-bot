@@ -143,5 +143,10 @@
     "articleUrl": "https://chemenggcalc.com/rate-constant-calculation/",
     "postId": "671765686009391_122184808052796471",
     "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-06T15:37:39.801Z",
+    "status": "error",
+    "message": "Could not fetch post URLs from any source (REST API, Sitemap, or RSS Feed)."
   }
 ]
