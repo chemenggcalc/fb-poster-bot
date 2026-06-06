@@ -148,5 +148,13 @@
     "timestamp": "2026-06-06T15:37:39.801Z",
     "status": "error",
     "message": "Could not fetch post URLs from any source (REST API, Sitemap, or RSS Feed)."
+  },
+  {
+    "timestamp": "2026-06-06T15:52:16.541Z",
+    "status": "success",
+    "articleTitle": "Antoine Equation Calculator for Vapour Pressure versus Temperature Calculations",
+    "articleUrl": "https://chemenggcalc.com/antoine-equation-calculator-for-vapour-pressure/",
+    "postId": "671765686009391_122184859118796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
