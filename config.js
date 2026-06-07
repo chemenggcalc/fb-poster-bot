@@ -8,14 +8,18 @@ const __dirname = path.dirname(__filename);
 // Load .env file
 dotenv.config({ path: path.join(__dirname, '.env') });
 
+const envFeed = process.env.RSS_FEED_URL;
+const isOldFeed = envFeed && (envFeed.trim().replace(/\/$/, '') === 'https://chemenggcalc.com/feed');
+const targetRssFeedUrl = (!envFeed || isOldFeed) ? 'https://chemenggcalc.com/category/calculator/feed/' : envFeed;
+
 export const config = {
   geminiApiKey: process.env.GEMINI_API_KEY,
   fbPageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN,
   fbPageId: process.env.FB_PAGE_ID,
-  rssFeedUrl: process.env.RSS_FEED_URL,
+  rssFeedUrl: targetRssFeedUrl,
   websiteUrl: process.env.WEBSITE_URL,
   cronSchedule: process.env.CRON_SCHEDULE || '0 9 * * *',
-  systemInstruction: process.env.SYSTEM_INSTRUCTION || 'You are a social media copywriter. Write a highly engaging Facebook post summarizing the following article. Use emojis, appropriate spacing/paragraphs, and 3-5 relevant hashtags. Maintain an informative and inviting tone. Do not add any intros like "Here is a post:".',
+  systemInstruction: process.env.SYSTEM_INSTRUCTION || 'You are a social media copywriter. Write a highly engaging Facebook post summarizing the following article. Use emojis, appropriate spacing/paragraphs, and 3-5 relevant hashtags. Maintain an informative and inviting tone. Do not use any markdown formatting (like asterisks ** for bold or # for headers) as Facebook will display the raw characters. Do not add any intros like "Here is a post:".',
   geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
   resetHistoryWhenExhausted: process.env.RESET_POSTING_HISTORY_WHEN_EXHAUSTED === 'true',
 };

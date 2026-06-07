@@ -68,6 +68,10 @@ LINKEDIN_ACCESS_TOKEN = os.environ.get('LINKEDIN_ACCESS_TOKEN')
 LINKEDIN_COMPANY_ID   = os.environ.get('LINKEDIN_ORG_ID')
 GEMINI_API_KEY        = os.environ.get('GEMINI_API_KEY')
 
+env_feed = os.environ.get('RSS_FEED_URL')
+is_old_feed = env_feed and (env_feed.strip().rstrip('/') == 'https://chemenggcalc.com/feed')
+RSS_FEED_URL = 'https://chemenggcalc.com/category/calculator/feed/' if (not env_feed or is_old_feed) else env_feed
+
 
 # ==========================================
 # HELPERS
@@ -110,17 +114,6 @@ def fetch_with_retry(url, max_retries=3):
     return res
 
 
-def prewarm_connection():
-    """Visit the homepage first to pass initial Cloudflare checks."""
-    print("Pre-warming connection by visiting homepage...")
-    try:
-        requests.get(WP_BASE_URL, headers=SCRAPE_HEADERS, timeout=15)
-        print("Homepage visited successfully.")
-    except Exception as e:
-        print(f"Homepage pre-warm returned {e} — continuing anyway.")
-    time.sleep(2)
-
-
 # ==========================================
 # GEMINI SETUP
 # ==========================================
@@ -136,111 +129,11 @@ def get_gemini_model():
     return genai.GenerativeModel(chosen.replace('models/', ''))
 
 
-# ==========================================
-# STEP 1 — GET ALL POST URLs FROM SOURCES
-# ==========================================
-def get_urls_from_wp_api():
-    """Fetch post URLs using WordPress REST API."""
-    print("Trying WordPress REST API...")
-    all_urls = []
-    page = 1
-    per_page = 100
-    while True:
-        api_url = f"{WP_BASE_URL}/wp-json/wp/v2/posts?per_page={per_page}&page={page}&_fields=link"
-        print(f"  -> Fetching REST API page {page}: {api_url}")
-        try:
-            res = fetch_with_retry(api_url)
-            # Check if it's JSON
-            if 'application/json' not in res.headers.get('Content-Type', '').lower():
-                print(f"  -> Expected JSON but got Content-Type: {res.headers.get('Content-Type')}")
-                return []
-            
-            data = res.json()
-            if not isinstance(data, list) or len(data) == 0:
-                break
-            
-            for post in data:
-                if isinstance(post, dict) and 'link' in post:
-                    all_urls.append(post['link'])
-            
-            # Check headers for pagination
-            total_pages = int(res.headers.get('X-WP-TotalPages', 1))
-            if page >= total_pages:
-                break
-            page += 1
-            time.sleep(1)
-        except Exception as e:
-            print(f"  -> REST API failed on page {page}: {e}")
-            if page == 1:
-                return []
-            break
-            
-    if all_urls:
-        print(f"  -> Found {len(all_urls)} post URLs from WordPress REST API.")
-    return all_urls
-
-
-def get_urls_from_sitemaps():
-    """Parse WordPress sitemaps and return all post URLs with retry logic."""
-    print("Trying XML sitemaps...")
-    sitemap_candidates = [
-        f"{WP_BASE_URL}/post-sitemap.xml",
-        f"{WP_BASE_URL}/sitemap_index.xml",
-        f"{WP_BASE_URL}/sitemap.xml",
-    ]
-    post_urls = []
-
-    for sitemap_url in sitemap_candidates:
-        print(f"Trying sitemap: {sitemap_url}")
-        try:
-            res = fetch_with_retry(sitemap_url)
-            content_type = res.headers.get('Content-Type', '').lower()
-            if 'html' in content_type:
-                print("  -> Warning: Received HTML instead of XML sitemap.")
-                continue
-
-            soup = BeautifulSoup(res.content, 'lxml-xml')
-
-            # If this is a sitemap index, find the post-sitemap child
-            sitemap_tags = soup.find_all('sitemap')
-            if sitemap_tags:
-                print("  -> Sitemap index found, locating post sitemap...")
-                for s in sitemap_tags:
-                    loc = s.find('loc')
-                    if loc and 'post' in loc.text.lower():
-                        print(f"  -> Post sitemap: {loc.text}")
-                        time.sleep(2)  # Delay before fetching child sitemap
-                        sub_res = fetch_with_retry(loc.text)
-                        sub_content_type = sub_res.headers.get('Content-Type', '').lower()
-                        if 'html' in sub_content_type:
-                            print("  -> Warning: Received HTML instead of child XML sitemap.")
-                            continue
-                        sub_soup = BeautifulSoup(sub_res.content, 'lxml-xml')
-                        post_urls = [u.text.strip() for u in sub_soup.find_all('loc')]
-                        break
-
-            # Direct URL sitemap
-            if not post_urls:
-                url_tags = soup.find_all('url')
-                post_urls = [u.find('loc').text.strip() for u in url_tags if u.find('loc')]
-
-            if post_urls:
-                print(f"  -> Found {len(post_urls)} post URLs.")
-                break
-        except Exception as e:
-            print(f"  -> Error fetching sitemap {sitemap_url}: {e}")
-        # Delay before trying the next sitemap
-        time.sleep(3)
-
-    return post_urls
-
-
 def get_urls_from_rss():
     """Fetch post URLs from RSS feed."""
-    rss_feed_url = f"{WP_BASE_URL}/feed"
-    print(f"Trying RSS feed: {rss_feed_url}")
+    print(f"Trying RSS feed: {RSS_FEED_URL}")
     try:
-        res = fetch_with_retry(rss_feed_url)
+        res = fetch_with_retry(RSS_FEED_URL)
         content_type = res.headers.get('Content-Type', '').lower()
         if 'html' in content_type:
             print("  -> Warning: Received HTML instead of RSS feed XML.")
@@ -263,32 +156,12 @@ def get_urls_from_rss():
 
 
 def get_all_post_urls():
-    """Get all post URLs with multiple fallbacks: WP REST API -> Sitemap XML -> RSS Feed."""
-    # Pre-warm connection first
-    prewarm_connection()
-
-    # Method 1: WordPress REST API (most reliable on Cloudflare)
-    urls = get_urls_from_wp_api()
-    if urls:
-        return urls
-
-    print("REST API failed. Waiting 5s before trying sitemaps...")
-    time.sleep(5)
-
-    # Method 2: Sitemap XML
-    urls = get_urls_from_sitemaps()
-    if urls:
-        return urls
-
-    print("Sitemaps failed. Waiting 5s before trying RSS feed...")
-    time.sleep(5)
-
-    # Method 3: RSS Feed
+    """Get all post URLs using RSS Feed only."""
     urls = get_urls_from_rss()
     if urls:
         return urls
 
-    raise Exception("Could not fetch post URLs from any source (WP REST API, Sitemap, or RSS Feed).")
+    raise Exception(f"Could not fetch post URLs from RSS Feed ({RSS_FEED_URL}).")
 
 
 def fetch_random_article():

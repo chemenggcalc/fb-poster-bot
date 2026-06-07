@@ -6,7 +6,7 @@ const SCRAPE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
-  'Accept-Encoding': 'gzip, deflate, br',
+  'Accept-Encoding': 'gzip, deflate',
   'Referer': config.websiteUrl || 'https://chemenggcalc.com/',
   'Connection': 'keep-alive',
   'Upgrade-Insecure-Requests': '1',
@@ -59,153 +59,11 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
 }
 
 /**
- * Pre-warm: Visit the homepage first to establish a "session" and pass initial Cloudflare checks.
- * Some Cloudflare setups allow subsequent requests after the first one passes.
- */
-async function prewarmConnection() {
-  const wpBaseUrl = (config.websiteUrl || 'https://chemenggcalc.com').replace(/\/$/, '');
-  console.log('[Scraper] Pre-warming connection by visiting homepage...');
-  try {
-    await axios.get(wpBaseUrl, {
-      headers: SCRAPE_HEADERS,
-      timeout: 15000,
-    });
-    console.log('[Scraper] Homepage visited successfully.');
-  } catch (e) {
-    console.warn(`[Scraper] Homepage pre-warm returned ${e.response?.status || e.message} — continuing anyway.`);
-  }
-  // Small delay after pre-warm
-  await sleep(2000);
-}
-
-/**
- * Method 1: Fetch all post URLs using WordPress REST API (most reliable from cloud servers).
- * WordPress REST API is designed for programmatic access.
- * @returns {Promise<Array<string>>}
- */
-async function getUrlsFromWpApi() {
-  const wpBaseUrl = (config.websiteUrl || 'https://chemenggcalc.com').replace(/\/$/, '');
-  const allUrls = [];
-  let page = 1;
-  const perPage = 100;
-
-  console.log('[Scraper] Trying WordPress REST API...');
-
-  while (true) {
-    try {
-      const apiUrl = `${wpBaseUrl}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&_fields=link`;
-      console.log(`[Scraper] Fetching REST API page ${page}: ${apiUrl}`);
-      
-      const res = await fetchWithRetry(apiUrl);
-
-      if (!res.data || !Array.isArray(res.data) || res.data.length === 0) {
-        break;
-      }
-
-      for (const post of res.data) {
-        if (post.link) {
-          allUrls.push(post.link);
-        }
-      }
-
-      // Check if there are more pages
-      const totalPages = parseInt(res.headers['x-wp-totalpages'] || '1', 10);
-      if (page >= totalPages) {
-        break;
-      }
-      page++;
-      await sleep(1000); // Small delay between pagination requests
-    } catch (e) {
-      if (page === 1) {
-        console.warn(`[Scraper Warning] WordPress REST API failed after retries: ${e.message}`);
-        return []; // Return empty to trigger fallback
-      }
-      break; // We got some URLs, stop pagination
-    }
-  }
-
-  if (allUrls.length > 0) {
-    console.log(`[Scraper] Found ${allUrls.length} post URLs from WordPress REST API.`);
-  }
-  return allUrls;
-}
-
-/**
- * Method 2: Parse WordPress sitemaps (works well from local PC, may be blocked by Cloudflare on cloud).
- * @returns {Promise<Array<string>>}
- */
-async function getUrlsFromSitemap() {
-  const wpBaseUrl = (config.websiteUrl || 'https://chemenggcalc.com').replace(/\/$/, '');
-  const sitemapCandidates = [
-    `${wpBaseUrl}/post-sitemap.xml`,
-    `${wpBaseUrl}/sitemap_index.xml`,
-    `${wpBaseUrl}/sitemap.xml`,
-  ];
-  
-  let postUrls = [];
-
-  for (const sitemapUrl of sitemapCandidates) {
-    console.log(`[Scraper] Trying sitemap: ${sitemapUrl}`);
-    try {
-      const res = await fetchWithRetry(sitemapUrl);
-      
-      const $ = cheerio.load(res.data, { xmlMode: true });
-
-      // If this is a sitemap index, find the post-sitemap child
-      const sitemapTags = $('sitemap');
-      if (sitemapTags.length > 0) {
-        console.log('[Scraper] Sitemap index found, locating post sitemap...');
-        let postSitemapUrl = null;
-        sitemapTags.each((_, el) => {
-          const loc = $(el).find('loc').text().trim();
-          if (loc && loc.toLowerCase().includes('post')) {
-            postSitemapUrl = loc;
-            return false;
-          }
-        });
-        
-        if (postSitemapUrl) {
-          console.log(`[Scraper] Fetching post sitemap: ${postSitemapUrl}`);
-          await sleep(2000); // Delay before fetching child sitemap
-          const subRes = await fetchWithRetry(postSitemapUrl);
-          const sub$ = cheerio.load(subRes.data, { xmlMode: true });
-          sub$('loc').each((_, el) => {
-            const locText = sub$(el).text().trim();
-            if (locText) postUrls.push(locText);
-          });
-        }
-      }
-
-      // Direct URL sitemap
-      if (postUrls.length === 0) {
-        $('url').each((_, el) => {
-          const loc = $(el).find('loc').text().trim();
-          if (loc) {
-            postUrls.push(loc);
-          }
-        });
-      }
-
-      if (postUrls.length > 0) {
-        console.log(`[Scraper] Found ${postUrls.length} post URLs from sitemap.`);
-        break;
-      }
-    } catch (e) {
-      console.warn(`[Scraper Warning] Failed parsing sitemap ${sitemapUrl}: ${e.message}`);
-    }
-    // Delay before trying the next sitemap candidate
-    await sleep(3000);
-  }
-
-  return postUrls;
-}
-
-/**
- * Method 3: Fetch post URLs from RSS feed (fallback).
+ * Fetch post URLs from RSS feed.
  * @returns {Promise<Array<string>>}
  */
 async function getUrlsFromRSS() {
-  const rssFeedUrl = config.rssFeedUrl || `${(config.websiteUrl || 'https://chemenggcalc.com').replace(/\/$/, '')}/feed`;
+  const rssFeedUrl = config.rssFeedUrl;
   
   console.log(`[Scraper] Trying RSS feed: ${rssFeedUrl}`);
   try {
@@ -229,34 +87,15 @@ async function getUrlsFromRSS() {
 }
 
 /**
- * Main function to get all post URLs using multiple methods with fallbacks.
- * Pre-warms the connection first, then tries: WordPress REST API -> Sitemap XML -> RSS Feed
- * Each method has built-in retry logic with delays to handle Cloudflare rate limiting.
+ * Main function to get all post URLs using RSS Feed only.
  * @returns {Promise<Array<string>>}
  */
 export async function getAllPostUrls() {
-  // Pre-warm: visit homepage to pass initial Cloudflare challenge
-  await prewarmConnection();
-
-  // Method 1: WordPress REST API (most reliable from cloud)
-  let urls = await getUrlsFromWpApi();
+  // Directly read RSS Feed
+  const urls = await getUrlsFromRSS();
   if (urls.length > 0) return urls;
 
-  console.log('[Scraper] REST API failed. Waiting 5s before trying sitemaps...');
-  await sleep(5000);
-
-  // Method 2: Sitemap XML
-  urls = await getUrlsFromSitemap();
-  if (urls.length > 0) return urls;
-
-  console.log('[Scraper] Sitemaps failed. Waiting 5s before trying RSS feed...');
-  await sleep(5000);
-
-  // Method 3: RSS Feed (limited to recent posts but always works)
-  urls = await getUrlsFromRSS();
-  if (urls.length > 0) return urls;
-
-  throw new Error('Could not fetch post URLs from any source (REST API, Sitemap, or RSS Feed).');
+  throw new Error(`Could not fetch post URLs from RSS Feed (${config.rssFeedUrl}).`);
 }
 
 /**
