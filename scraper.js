@@ -62,9 +62,7 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
  * Fetch post URLs from RSS feed.
  * @returns {Promise<Array<string>>}
  */
-async function getUrlsFromRSS() {
-  const rssFeedUrl = config.rssFeedUrl;
-  
+async function getUrlsFromRSS(rssFeedUrl) {
   console.log(`[Scraper] Trying RSS feed: ${rssFeedUrl}`);
   try {
     const res = await fetchWithRetry(rssFeedUrl);
@@ -91,11 +89,17 @@ async function getUrlsFromRSS() {
  * @returns {Promise<Array<string>>}
  */
 export async function getAllPostUrls() {
-  // Directly read RSS Feed
-  const urls = await getUrlsFromRSS();
+  // 1. Try primary calculator feed
+  let urls = await getUrlsFromRSS(config.rssFeedUrl);
   if (urls.length > 0) return urls;
 
-  throw new Error(`Could not fetch post URLs from RSS Feed (${config.rssFeedUrl}).`);
+  // 2. Fallback to blog feed
+  console.log('[Scraper] Calculator feed failed or returned no posts. Trying blog feed...');
+  const blogFeedUrl = 'https://chemenggcalc.com/category/blog/feed/';
+  urls = await getUrlsFromRSS(blogFeedUrl);
+  if (urls.length > 0) return urls;
+
+  throw new Error(`Could not fetch post URLs from RSS Feed (${config.rssFeedUrl}) or Blog Feed.`);
 }
 
 /**

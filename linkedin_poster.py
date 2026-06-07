@@ -129,11 +129,11 @@ def get_gemini_model():
     return genai.GenerativeModel(chosen.replace('models/', ''))
 
 
-def get_urls_from_rss():
+def get_urls_from_rss(feed_url):
     """Fetch post URLs from RSS feed."""
-    print(f"Trying RSS feed: {RSS_FEED_URL}")
+    print(f"Trying RSS feed: {feed_url}")
     try:
-        res = fetch_with_retry(RSS_FEED_URL)
+        res = fetch_with_retry(feed_url)
         content_type = res.headers.get('Content-Type', '').lower()
         if 'html' in content_type:
             print("  -> Warning: Received HTML instead of RSS feed XML.")
@@ -157,11 +157,19 @@ def get_urls_from_rss():
 
 def get_all_post_urls():
     """Get all post URLs using RSS Feed only."""
-    urls = get_urls_from_rss()
+    # 1. Try primary calculator feed
+    urls = get_urls_from_rss(RSS_FEED_URL)
     if urls:
         return urls
 
-    raise Exception(f"Could not fetch post URLs from RSS Feed ({RSS_FEED_URL}).")
+    # 2. Fallback to blog feed
+    print("Calculator feed failed or returned no posts. Trying blog feed...")
+    blog_feed_url = 'https://chemenggcalc.com/category/blog/feed/'
+    urls = get_urls_from_rss(blog_feed_url)
+    if urls:
+        return urls
+
+    raise Exception(f"Could not fetch post URLs from RSS Feed ({RSS_FEED_URL}) or Blog Feed.")
 
 
 def fetch_random_article():
