@@ -8,6 +8,7 @@ if sys.platform.startswith('win'):
         pass
 
 import requests
+import urllib.parse
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 import random
@@ -130,13 +131,28 @@ def get_gemini_model():
 
 
 def get_urls_from_rss(feed_url):
-    """Fetch post URLs from RSS feed."""
-    print(f"Trying RSS feed: {feed_url}")
+    """Fetch post URLs from RSS feed via api.rss2json.com proxy to bypass Cloudflare."""
+    proxy_url = f"https://api.rss2json.com/v1/api.json?rss_url={urllib.parse.quote(feed_url)}"
+    print(f"Trying RSS feed via proxy: {proxy_url}")
+    try:
+        res = fetch_with_retry(proxy_url)
+        data = res.json()
+        if data.get('status') == 'ok' and isinstance(data.get('items'), list):
+            urls = [item.get('link') for item in data.get('items') if item.get('link')]
+            if urls:
+                print(f"  -> Found {len(urls)} post URLs from RSS feed via proxy.")
+                return urls
+        print(f"  -> Proxy returned status: {data.get('status')}")
+    except Exception as e:
+        print(f"  -> RSS proxy failed: {e}")
+
+    # Fallback to direct fetch in case the proxy is down
+    print(f"Trying direct RSS fetch as fallback: {feed_url}")
     try:
         res = fetch_with_retry(feed_url)
         content_type = res.headers.get('Content-Type', '').lower()
         if 'html' in content_type:
-            print("  -> Warning: Received HTML instead of RSS feed XML.")
+            print("  -> Warning: Received HTML instead of RSS feed XML on direct fetch.")
             return []
         
         soup = BeautifulSoup(res.content, 'lxml-xml')
@@ -148,10 +164,10 @@ def get_urls_from_rss(feed_url):
                 urls.append(link_tag.text.strip())
         
         if urls:
-            print(f"  -> Found {len(urls)} post URLs from RSS feed.")
+            print(f"  -> Found {len(urls)} post URLs from direct RSS feed.")
         return urls
     except Exception as e:
-        print(f"  -> RSS feed failed: {e}")
+        print(f"  -> Direct RSS feed fallback failed: {e}")
         return []
 
 

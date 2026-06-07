@@ -63,7 +63,24 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
  * @returns {Promise<Array<string>>}
  */
 async function getUrlsFromRSS(rssFeedUrl) {
-  console.log(`[Scraper] Trying RSS feed: ${rssFeedUrl}`);
+  const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssFeedUrl)}`;
+  console.log(`[Scraper] Trying RSS feed via proxy: ${proxyUrl}`);
+  try {
+    const res = await fetchWithRetry(proxyUrl);
+    if (res.data && res.data.status === 'ok' && Array.isArray(res.data.items)) {
+      const urls = res.data.items.map(item => item.link).filter(Boolean);
+      if (urls.length > 0) {
+        console.log(`[Scraper] Found ${urls.length} post URLs from RSS feed via proxy.`);
+        return urls;
+      }
+    }
+    console.warn(`[Scraper Warning] RSS proxy returned status: ${res.data?.status}`);
+  } catch (e) {
+    console.warn(`[Scraper Warning] RSS proxy failed: ${e.message}`);
+  }
+
+  // Fallback to direct fetch in case the proxy is down
+  console.log(`[Scraper] Trying direct RSS fetch as fallback: ${rssFeedUrl}`);
   try {
     const res = await fetchWithRetry(rssFeedUrl);
 
@@ -75,11 +92,11 @@ async function getUrlsFromRSS(rssFeedUrl) {
     });
 
     if (urls.length > 0) {
-      console.log(`[Scraper] Found ${urls.length} post URLs from RSS feed.`);
+      console.log(`[Scraper] Found ${urls.length} post URLs from direct RSS feed.`);
     }
     return urls;
   } catch (e) {
-    console.warn(`[Scraper Warning] RSS feed failed after retries: ${e.message}`);
+    console.warn(`[Scraper Warning] Direct RSS feed fallback failed: ${e.message}`);
     return [];
   }
 }
