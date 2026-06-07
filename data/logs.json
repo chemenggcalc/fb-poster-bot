@@ -171,5 +171,13 @@
     "timestamp": "2026-06-07T08:51:40.427Z",
     "status": "error",
     "message": "Could not fetch post URLs from RSS Feed (https://chemenggcalc.com/category/calculator/feed/) or Blog Feed."
+  },
+  {
+    "timestamp": "2026-06-07T08:58:01.395Z",
+    "status": "success",
+    "articleTitle": "Interactive McCabe-Thiele Diagram Generator for Binary Distillation",
+    "articleUrl": "https://chemenggcalc.com/mccabe-thiele-diagram-calculator-distillation/",
+    "postId": "671765686009391_122184916310796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
