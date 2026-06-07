@@ -179,5 +179,10 @@
     "articleUrl": "https://chemenggcalc.com/mccabe-thiele-diagram-calculator-distillation/",
     "postId": "671765686009391_122184916310796471",
     "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-07T18:57:43.798Z",
+    "status": "error",
+    "message": "Request failed with status code 403"
   }
 ]
