@@ -189,5 +189,13 @@
     "timestamp": "2026-06-08T19:52:26.622Z",
     "status": "error",
     "message": "Request failed with status code 403"
+  },
+  {
+    "timestamp": "2026-06-09T19:48:59.129Z",
+    "status": "success",
+    "articleTitle": "Ponchon-Savarit Diagram Calculator for Binary Distillation - Interactive Tool",
+    "articleUrl": "https://chemenggcalc.com/ponchon-savarit-diagram-calculator-distillation/",
+    "postId": "671765686009391_122185139096796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
