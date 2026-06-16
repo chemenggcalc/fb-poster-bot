@@ -236,5 +236,10 @@
     "timestamp": "2026-06-15T20:40:19.569Z",
     "status": "error",
     "message": "{\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+  },
+  {
+    "timestamp": "2026-06-16T20:32:26.408Z",
+    "status": "error",
+    "message": "{\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
   }
 ]
