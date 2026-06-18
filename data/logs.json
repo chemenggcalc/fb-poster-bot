@@ -246,5 +246,13 @@
     "timestamp": "2026-06-17T19:50:54.530Z",
     "status": "error",
     "message": "Request failed with status code 403"
+  },
+  {
+    "timestamp": "2026-06-18T19:56:52.157Z",
+    "status": "success",
+    "articleTitle": "Vessel Volume Calculator for Ellipsoidal, Hemispherical, Horispherical & Flat Head Type",
+    "articleUrl": "https://chemenggcalc.com/vessel-volume-calculator-head-types/",
+    "postId": "671765686009391_122186045354796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
