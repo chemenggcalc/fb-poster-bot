@@ -42,7 +42,7 @@ load_env()
 # ==========================================
 # CONFIGURATION
 # ==========================================
-WP_BASE_URL = "https://chemenggcalc.com"
+WP_BASE_URL = "https://chemenggcalc.com/category/calculator/"
 DB_FILE = "data/posted_articles_linkedin.json"
 
 # Ensure data directory exists
