@@ -326,5 +326,10 @@
     "articleUrl": "https://chemenggcalc.com/vessel-volume-calculator-head-types/",
     "postId": "671765686009391_122186882312796471",
     "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-28T18:50:30.811Z",
+    "status": "error",
+    "message": "Request failed with status code 403"
   }
 ]
