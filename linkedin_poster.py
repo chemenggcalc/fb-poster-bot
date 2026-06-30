@@ -45,6 +45,17 @@ load_env()
 WP_BASE_URL = "https://chemenggcalc.com/category/calculator/"
 DB_FILE = "data/posted_articles_linkedin.json"
 
+# Sitemap is the primary source of post URLs (covers ALL published posts,
+# unlike RSS which is capped at ~10 most recent items)
+SITEMAP_URL = "https://chemenggcalc.com/post-sitemap.xml"
+
+EXCLUDE_PATTERNS = [
+    "/category/", "/tag/", "/author/", "/page/",
+    "/about-us", "/contact-us", "/privacy-policy",
+    "/disclaimer", "/terms-and-conditions",
+    "/wp-json", "/feed", "/sitemap",
+]
+
 # Ensure data directory exists
 os.makedirs("data", exist_ok=True)
 
@@ -130,6 +141,69 @@ def get_gemini_model():
     return genai.GenerativeModel(chosen.replace('models/', ''))
 
 
+# ==========================================
+# SITEMAP-BASED URL DISCOVERY (primary)
+# ==========================================
+def is_real_post(url, base_url="https://chemenggcalc.com"):
+    """Filter out non-article URLs (category pages, author pages, legal pages, etc)."""
+    if not url:
+        return False
+    path = url.replace(base_url, "").rstrip("/")
+    if path in ("", "/"):
+        return False
+    return not any(p in url for p in EXCLUDE_PATTERNS)
+
+
+def parse_locs(xml_bytes):
+    """Extract all <loc> values from an XML sitemap document."""
+    soup = BeautifulSoup(xml_bytes, "lxml-xml")
+    return [loc.get_text(strip=True) for loc in soup.find_all("loc") if loc.get_text(strip=True)]
+
+
+def get_urls_from_sitemap(sitemap_url=SITEMAP_URL):
+    """
+    Fetch all post URLs directly from post-sitemap.xml.
+    If this URL ever turns out to be a sitemap index instead of a flat
+    sitemap (i.e. its <loc> entries are themselves .xml files), recurse
+    into each of those sub-sitemaps automatically.
+    """
+    try:
+        print(f"Fetching sitemap: {sitemap_url}")
+        res = fetch_with_retry(sitemap_url)
+        locs = parse_locs(res.content)
+        if not locs:
+            print("  -> No <loc> entries found in sitemap.")
+            return []
+
+        xml_locs = [l for l in locs if l.lower().endswith(".xml")]
+        if xml_locs:
+            # It's actually a sitemap index — recurse into each sub-sitemap
+            print(f"  -> {sitemap_url} is a sitemap index with {len(xml_locs)} sub-sitemap(s); recursing...")
+            all_urls = []
+            for sm in xml_locs:
+                all_urls.extend(get_urls_from_sitemap(sm))
+            urls = all_urls
+        else:
+            urls = [l for l in locs if is_real_post(l)]
+
+        # De-duplicate while preserving order
+        seen = set()
+        deduped = []
+        for u in urls:
+            if u not in seen:
+                seen.add(u)
+                deduped.append(u)
+
+        print(f"  -> {len(deduped)} post URLs found in {sitemap_url}.")
+        return deduped
+    except Exception as e:
+        print(f"  -> Failed to fetch {sitemap_url}: {e}")
+        return []
+
+
+# ==========================================
+# RSS-BASED URL DISCOVERY (fallback only)
+# ==========================================
 def get_urls_from_rss(feed_url):
     """Fetch post URLs from RSS feed via api.rss2json.com proxy to bypass Cloudflare."""
     proxy_url = f"https://api.rss2json.com/v1/api.json?rss_url={urllib.parse.quote(feed_url)}"
@@ -154,7 +228,7 @@ def get_urls_from_rss(feed_url):
         if 'html' in content_type:
             print("  -> Warning: Received HTML instead of RSS feed XML on direct fetch.")
             return []
-        
+
         soup = BeautifulSoup(res.content, 'lxml-xml')
         items = soup.find_all('item')
         urls = []
@@ -162,7 +236,7 @@ def get_urls_from_rss(feed_url):
             link_tag = item.find('link')
             if link_tag and link_tag.text.strip():
                 urls.append(link_tag.text.strip())
-        
+
         if urls:
             print(f"  -> Found {len(urls)} post URLs from direct RSS feed.")
         return urls
@@ -172,20 +246,30 @@ def get_urls_from_rss(feed_url):
 
 
 def get_all_post_urls():
-    """Get all post URLs using RSS Feed only."""
-    # 1. Try primary calculator feed
+    """
+    Get all post URLs. Sitemap is primary (covers ALL published posts/calculators).
+    RSS feeds are only used as a fallback if the sitemap fetch fails entirely,
+    since RSS is capped at ~10 most recent items.
+    """
+    # 1. Primary: sitemap
+    urls = get_urls_from_sitemap()
+    if urls:
+        return urls
+
+    # 2. Fallback: calculator RSS feed
+    print("Sitemap fetch failed or returned no posts. Falling back to RSS feed...")
     urls = get_urls_from_rss(RSS_FEED_URL)
     if urls:
         return urls
 
-    # 2. Fallback to blog feed
+    # 3. Fallback: blog RSS feed
     print("Calculator feed failed or returned no posts. Trying blog feed...")
     blog_feed_url = 'https://chemenggcalc.com/category/blog/feed/'
     urls = get_urls_from_rss(blog_feed_url)
     if urls:
         return urls
 
-    raise Exception(f"Could not fetch post URLs from RSS Feed ({RSS_FEED_URL}) or Blog Feed.")
+    raise Exception(f"Could not fetch post URLs from Sitemap ({SITEMAP_URL}), Calculator Feed, or Blog Feed.")
 
 
 def fetch_random_article():
