@@ -54,7 +54,18 @@ EXCLUDE_PATTERNS = [
     "/about-us", "/contact-us", "/privacy-policy",
     "/disclaimer", "/terms-and-conditions",
     "/wp-json", "/feed", "/sitemap",
+    "/wp-content/",  # raw media/asset files (images, PDFs, etc) sometimes leak into post-sitemap.xml
 ]
+
+# Reject any URL whose path ends in a non-HTML file extension (images, docs, etc).
+# These occasionally appear in post-sitemap.xml (e.g. directly-uploaded media files)
+# and aren't real article pages — scraping them produces no title/content/image,
+# which previously caused Gemini to hallucinate a post from just the URL slug.
+NON_ARTICLE_EXTENSIONS = (
+    ".webp", ".jpg", ".jpeg", ".png", ".gif", ".svg", ".bmp", ".ico",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".csv",
+    ".mp4", ".mp3", ".mov", ".avi",
+)
 
 # Ensure data directory exists
 os.makedirs("data", exist_ok=True)
@@ -136,13 +147,18 @@ def get_gemini_model():
 # SITEMAP-BASED URL DISCOVERY (primary)
 # ==========================================
 def is_real_post(url, base_url="https://chemenggcalc.com"):
-    """Filter out non-article URLs (category pages, author pages, legal pages, etc)."""
+    """Filter out non-article URLs (category pages, author pages, legal pages,
+    raw media files, etc)."""
     if not url:
         return False
     path = url.replace(base_url, "").rstrip("/")
     if path in ("", "/"):
         return False
-    return not any(p in url for p in EXCLUDE_PATTERNS)
+    if any(p in url for p in EXCLUDE_PATTERNS):
+        return False
+    if url.lower().split("?")[0].endswith(NON_ARTICLE_EXTENSIONS):
+        return False
+    return True
 
 
 def parse_locs(xml_bytes):
@@ -334,6 +350,18 @@ def fetch_random_article():
 
             print(f"Title         : {title}")
             print(f"Featured Image: {featured_image}")
+
+            # Sanity check: a real article page should have an og:title distinct
+            # from the bare URL, and some actual body text. If both are missing,
+            # this almost certainly isn't a real article (e.g. a raw image/asset
+            # URL that slipped through the sitemap filter) — skip it rather than
+            # letting Gemini hallucinate a post from just the URL slug.
+            has_real_title = bool(og_title and og_title.get('content'))
+            has_real_content = len(full_text.strip()) > 200
+            if not has_real_title and not has_real_content:
+                print("  -> Page has no real title/content (likely not an article page), skipping...")
+                continue
+
             return title, topic, full_text, article_url, featured_image, posted_urls
         except Exception as e:
             print(f"  -> Scrape error: {e}, retrying...")
