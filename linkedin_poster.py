@@ -384,8 +384,15 @@ Article Full Content (use for formulas): {full_text}
     # Clean up any markdown formatting that Gemini might add
     post_text = post_text.replace('**', '')
 
-    if len(post_text) > 2800:
-        print(f"Warning: Post is {len(post_text)} chars — may be truncated by LinkedIn.")
+    # LinkedIn's commentary field hard-caps at 3000 characters. Anything over
+    # gets rejected or silently mangled server-side, which is what was causing
+    # "doesn't post full article sometimes". We leave headroom for the
+    # "Read here: <url>\n\n" prefix added later in main().
+    LINKEDIN_HARD_LIMIT = 2900  # leave ~100 chars headroom for the URL prefix
+    if len(post_text) > LINKEDIN_HARD_LIMIT:
+        print(f"Warning: Post is {len(post_text)} chars — truncating to {LINKEDIN_HARD_LIMIT} to fit LinkedIn's limit.")
+        post_text = post_text[:LINKEDIN_HARD_LIMIT].rsplit('\n', 1)[0].rstrip() + "..."
+
     return post_text
 
 
@@ -419,7 +426,12 @@ def upload_image_to_linkedin(access_token, company_id, image_url):
     image_urn  = init_data['value']['image']
 
     # 2. Download image from WordPress and push to LinkedIn
-    img_bytes = requests.get(image_url, headers=SCRAPE_HEADERS, timeout=15).content
+    img_resp = requests.get(image_url, headers=SCRAPE_HEADERS, timeout=15)
+    if img_resp.status_code != 200:
+        raise Exception(f"Failed to download featured image ({img_resp.status_code}) from {image_url}")
+    img_bytes = img_resp.content
+    if not img_bytes or len(img_bytes) < 100:
+        raise Exception(f"Downloaded image from {image_url} looks empty/invalid ({len(img_bytes)} bytes)")
 
     put_res = requests.put(upload_url, headers={'Authorization': f'Bearer {access_token}'}, data=img_bytes, timeout=30)
 
@@ -536,10 +548,16 @@ def main():
                 print("Publishing aborted by user.")
                 return
 
-        # 5. Upload image if available
+        # 5. Upload image if available (fall back to text-only post if this fails,
+        #    instead of letting it crash the whole run before we ever attempt the post)
         image_urn = None
         if featured_image:
-            image_urn = upload_image_to_linkedin(LINKEDIN_ACCESS_TOKEN, LINKEDIN_COMPANY_ID, featured_image)
+            try:
+                image_urn = upload_image_to_linkedin(LINKEDIN_ACCESS_TOKEN, LINKEDIN_COMPANY_ID, featured_image)
+            except Exception as e:
+                print(f"[Image Upload Failed] {e}")
+                print("Continuing with a text-only post instead of aborting.")
+                image_urn = None
 
         # 6. Publish post
         success = create_linkedin_post(LINKEDIN_ACCESS_TOKEN, LINKEDIN_COMPANY_ID, post_text, image_urn)
