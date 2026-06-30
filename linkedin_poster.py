@@ -59,20 +59,11 @@ EXCLUDE_PATTERNS = [
 # Ensure data directory exists
 os.makedirs("data", exist_ok=True)
 
-# Browser-like headers to bypass Cloudflare
+# Simple, honest bot User-Agent — proven to pass Cloudflare on this site
+# (the elaborate fake-Chrome header set was actually triggering bot detection;
+# this minimal self-identifying UA is what the working Pinterest automation uses)
 SCRAPE_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate',
-    'Referer': 'https://chemenggcalc.com/',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'same-origin',
-    'Sec-Fetch-User': '?1',
-    'Cache-Control': 'max-age=0',
+    "User-Agent": "Mozilla/5.0 (compatible; ChemEnggCalcBot/1.0; +https://chemenggcalc.com)"
 }
 
 # Fetch credentials from environment
@@ -428,10 +419,7 @@ def upload_image_to_linkedin(access_token, company_id, image_url):
     image_urn  = init_data['value']['image']
 
     # 2. Download image from WordPress and push to LinkedIn
-    img_bytes = requests.get(image_url, headers={
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://chemenggcalc.com/'
-    }, timeout=15).content
+    img_bytes = requests.get(image_url, headers=SCRAPE_HEADERS, timeout=15).content
 
     put_res = requests.put(upload_url, headers={'Authorization': f'Bearer {access_token}'}, data=img_bytes, timeout=30)
 
