@@ -339,5 +339,10 @@
     "articleUrl": "https://chemenggcalc.com/vessel-head-calculator-surface-area-blank-size/",
     "postId": "671765686009391_122187049004796471",
     "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-06-30T19:25:50.952Z",
+    "status": "error",
+    "message": "Request failed with status code 403"
   }
 ]
