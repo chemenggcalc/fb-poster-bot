@@ -360,26 +360,27 @@ Article Full Content (use for formulas): {full_text}
 
 ===== POST STRUCTURE =====
 
-1. OPENING HOOK (1 short line): A relatable problem for chemical engineers. Use 1 emoji.
+1. OPENING HOOK (1 line): A relatable problem for chemical engineers. Use 1-2 emojis.
 
-2. PROBLEM + SOLUTION (1-2 short lines combined): The pain point and what the calculator solves.
+2. PROBLEM (2-3 short lines): The engineering pain point.
 
-3. THE FORMULA (1 line): The key formula in plain text (e.g. "Q = m x Cp x delta-T"), no symbol explanations.
+3. SOLUTION (2-3 short lines): What the article/calculator solves.
 
-4. HASHTAGS (1 line, 3-4 tags): e.g. #ChemicalEngineering #ChemEnggCalc
+4. THE FORMULA (2 lines): Find any formula from the article content. Write it in plain text (e.g. "Q = m x Cp x delta-T"). Briefly explain symbols. If no formula, mention the key method. Start with "The Formula:"
+
+5. HASHTAGS (1 line, 5-6 tags): e.g. #ChemicalEngineering #ChemEnggCalc #ProcessEngineering
 
 ===== RULES =====
-- HARD LIMIT: the ENTIRE post (all sections combined) must be under 450 characters, including spaces and emojis. This is a strict ceiling, not a target — aim for 350-400 characters to be safe.
-- Skip the "key takeaways" bullet list entirely — there is no room for it at this length.
+- 75-100 words MAX. Keep it concise.
 - NO markdown: no **bold**, no *italic*, no ```code```.
-- Plain text only. One emoji maximum.
-- Put one blank line between sections, not multiple.
+- Plain text only. Use emojis for emphasis.
+- Put a blank line between every section.
 - Do NOT include any call-to-action or article URL (it will be added automatically).
 - Do NOT add any placeholder text.
-- COMPLETE the entire post — do not cut off mid-sentence. A short complete post is far better than a longer cut-off one.
+- COMPLETE the entire post — do not cut off mid-sentence.
 """
     generation_config = {
-        "max_output_tokens": 300,  # tight cap matches the short-post requirement; still ample headroom
+        "max_output_tokens": 1024,  # generous headroom; default can silently truncate mid-formula
         "temperature": 0.9,
     }
 
@@ -398,8 +399,9 @@ Article Full Content (use for formulas): {full_text}
     # finish_reason name varies by SDK version; check both numeric and string forms
     truncated = str(finish_reason) in ("2", "MAX_TOKENS", "FinishReason.MAX_TOKENS")
     if truncated:
-        print(f"Warning: Gemini response was cut off (finish_reason={finish_reason}). Retrying once with a stricter limit...")
-        prompt += "\n\nIMPORTANT: Your previous attempt was cut off. Keep the ENTIRE post under 350 characters this time and make sure the hashtags line is fully written."
+        print(f"Warning: Gemini response was cut off (finish_reason={finish_reason}). Retrying once with a stricter word limit...")
+        # Retry once with an explicit instruction to be shorter, so it's less likely to hit the token cap again
+        prompt += "\n\nIMPORTANT: Your previous attempt was cut off. Keep the ENTIRE post under 150 words this time and make sure every section, including the hashtags line, is fully written."
         response, finish_reason = _generate()
 
     post_text = response.text.strip()
@@ -407,15 +409,14 @@ Article Full Content (use for formulas): {full_text}
     # Clean up any markdown formatting that Gemini might add
     post_text = post_text.replace('**', '')
 
-    # Hard safety net: enforce the 500-character requirement regardless of what
-    # Gemini returns. Truncates on a clean line boundary rather than mid-word.
-    CHAR_LIMIT = 480  # small buffer under 500 to account for the "Read here: <url>" prefix added later
-    if len(post_text) > CHAR_LIMIT:
-        print(f"Warning: Post is {len(post_text)} chars — truncating to {CHAR_LIMIT}.")
-        post_text = post_text[:CHAR_LIMIT].rsplit('\n', 1)[0].rstrip()
-        # Avoid ending on a dangling hashtag fragment or mid-sentence cut
-        if not post_text.endswith(('.', '!', '?')) and '#' not in post_text.splitlines()[-1]:
-            post_text = post_text.rsplit('.', 1)[0].rstrip() + "."
+    # LinkedIn's commentary field hard-caps at 3000 characters. Anything over
+    # gets rejected or silently mangled server-side, which is what was causing
+    # "doesn't post full article sometimes". We leave headroom for the
+    # "Read here: <url>\n\n" prefix added later in main().
+    LINKEDIN_HARD_LIMIT = 2900  # leave ~100 chars headroom for the URL prefix
+    if len(post_text) > LINKEDIN_HARD_LIMIT:
+        print(f"Warning: Post is {len(post_text)} chars — truncating to {LINKEDIN_HARD_LIMIT} to fit LinkedIn's limit.")
+        post_text = post_text[:LINKEDIN_HARD_LIMIT].rsplit('\n', 1)[0].rstrip() + "..."
 
     return post_text
 
