@@ -43,7 +43,6 @@ load_env()
 # CONFIGURATION
 # ==========================================
 WP_BASE_URL = "https://chemenggcalc.com/category/calculator/"
-DB_FILE = "data/posted_articles_linkedin.json"
 
 # Sitemap is the primary source of post URLs (covers ALL published posts,
 # unlike RSS which is capped at ~10 most recent items)
@@ -67,8 +66,6 @@ NON_ARTICLE_EXTENSIONS = (
     ".mp4", ".mp3", ".mov", ".avi",
 )
 
-# Ensure data directory exists
-os.makedirs("data", exist_ok=True)
 
 # Simple, honest bot User-Agent — proven to pass Cloudflare on this site
 # (the elaborate fake-Chrome header set was actually triggering bot detection;
@@ -280,34 +277,12 @@ def get_all_post_urls():
 
 
 def fetch_random_article():
-    """Pick a random post from the sitemap (avoiding duplicates) and scrape details."""
+    """Pick a random post from the sitemap and scrape details.
+    No duplicate-protection: repeats are fine."""
     all_urls = get_all_post_urls()
 
-    # Load posted history for duplicate protection
-    posted_urls = []
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r") as f:
-                posted_urls = json.load(f)
-        except Exception:
-            posted_urls = []
-
-    # Filter out already posted links
-    unposted_urls = [u for u in all_urls if u not in posted_urls]
-    print(f"[Duplicate Protection] {len(unposted_urls)} of {len(all_urls)} articles are unposted on LinkedIn.")
-
-    if not unposted_urls:
-        print("[Duplicate Protection] All articles have been posted on LinkedIn! Resetting history...")
-        posted_urls = []
-        unposted_urls = all_urls
-        if os.path.exists(DB_FILE):
-            try:
-                os.remove(DB_FILE)
-            except Exception:
-                pass
-
     for attempt in range(5):
-        article_url = random.choice(unposted_urls)
+        article_url = random.choice(all_urls)
         print(f"\nSelected URL (attempt {attempt+1}): {article_url}")
 
         try:
@@ -362,7 +337,7 @@ def fetch_random_article():
                 print("  -> Page has no real title/content (likely not an article page), skipping...")
                 continue
 
-            return title, topic, full_text, article_url, featured_image, posted_urls
+            return title, topic, full_text, article_url, featured_image
         except Exception as e:
             print(f"  -> Scrape error: {e}, retrying...")
 
@@ -385,41 +360,62 @@ Article Full Content (use for formulas): {full_text}
 
 ===== POST STRUCTURE =====
 
-1. OPENING HOOK (1 line): A relatable problem for chemical engineers. Use 1-2 emojis.
+1. OPENING HOOK (1 short line): A relatable problem for chemical engineers. Use 1 emoji.
 
-2. PROBLEM (2-3 short lines): The engineering pain point.
+2. PROBLEM + SOLUTION (1-2 short lines combined): The pain point and what the calculator solves.
 
-3. SOLUTION (2-3 short lines): What the article/calculator solves.
+3. THE FORMULA (1 line): The key formula in plain text (e.g. "Q = m x Cp x delta-T"), no symbol explanations.
 
-4. THE FORMULA (2 lines): Find any formula from the article content. Write it in plain text (e.g. "Q = m x Cp x delta-T"). Briefly explain symbols. If no formula, mention the key method. Start with "The Formula:"
-
-5. KEY TAKEAWAYS (3 bullet points using "-"): Under 12 words each.
-
-6. HASHTAGS (1 line, 5-6 tags): e.g. #ChemicalEngineering #ChemEnggCalc #ProcessEngineering
+4. HASHTAGS (1 line, 3-4 tags): e.g. #ChemicalEngineering #ChemEnggCalc
 
 ===== RULES =====
-- 150-200 words MAX. Keep it concise.
+- HARD LIMIT: the ENTIRE post (all sections combined) must be under 450 characters, including spaces and emojis. This is a strict ceiling, not a target — aim for 350-400 characters to be safe.
+- Skip the "key takeaways" bullet list entirely — there is no room for it at this length.
 - NO markdown: no **bold**, no *italic*, no ```code```.
-- Plain text only. Use emojis for emphasis.
-- Put a blank line between every section.
+- Plain text only. One emoji maximum.
+- Put one blank line between sections, not multiple.
 - Do NOT include any call-to-action or article URL (it will be added automatically).
 - Do NOT add any placeholder text.
-- COMPLETE the entire post — do not cut off mid-sentence.
+- COMPLETE the entire post — do not cut off mid-sentence. A short complete post is far better than a longer cut-off one.
 """
-    response = model.generate_content(prompt)
+    generation_config = {
+        "max_output_tokens": 300,  # tight cap matches the short-post requirement; still ample headroom
+        "temperature": 0.9,
+    }
+
+    def _generate():
+        resp = model.generate_content(prompt, generation_config=generation_config)
+        # Inspect finish_reason to detect silent truncation (MAX_TOKENS = 2 in the enum)
+        finish_reason = None
+        try:
+            finish_reason = resp.candidates[0].finish_reason
+        except Exception:
+            pass
+        return resp, finish_reason
+
+    response, finish_reason = _generate()
+
+    # finish_reason name varies by SDK version; check both numeric and string forms
+    truncated = str(finish_reason) in ("2", "MAX_TOKENS", "FinishReason.MAX_TOKENS")
+    if truncated:
+        print(f"Warning: Gemini response was cut off (finish_reason={finish_reason}). Retrying once with a stricter limit...")
+        prompt += "\n\nIMPORTANT: Your previous attempt was cut off. Keep the ENTIRE post under 350 characters this time and make sure the hashtags line is fully written."
+        response, finish_reason = _generate()
+
     post_text = response.text.strip()
 
     # Clean up any markdown formatting that Gemini might add
     post_text = post_text.replace('**', '')
 
-    # LinkedIn's commentary field hard-caps at 3000 characters. Anything over
-    # gets rejected or silently mangled server-side, which is what was causing
-    # "doesn't post full article sometimes". We leave headroom for the
-    # "Read here: <url>\n\n" prefix added later in main().
-    LINKEDIN_HARD_LIMIT = 2900  # leave ~100 chars headroom for the URL prefix
-    if len(post_text) > LINKEDIN_HARD_LIMIT:
-        print(f"Warning: Post is {len(post_text)} chars — truncating to {LINKEDIN_HARD_LIMIT} to fit LinkedIn's limit.")
-        post_text = post_text[:LINKEDIN_HARD_LIMIT].rsplit('\n', 1)[0].rstrip() + "..."
+    # Hard safety net: enforce the 500-character requirement regardless of what
+    # Gemini returns. Truncates on a clean line boundary rather than mid-word.
+    CHAR_LIMIT = 480  # small buffer under 500 to account for the "Read here: <url>" prefix added later
+    if len(post_text) > CHAR_LIMIT:
+        print(f"Warning: Post is {len(post_text)} chars — truncating to {CHAR_LIMIT}.")
+        post_text = post_text[:CHAR_LIMIT].rsplit('\n', 1)[0].rstrip()
+        # Avoid ending on a dangling hashtag fragment or mid-sentence cut
+        if not post_text.endswith(('.', '!', '?')) and '#' not in post_text.splitlines()[-1]:
+            post_text = post_text.rsplit('.', 1)[0].rstrip() + "."
 
     return post_text
 
@@ -538,7 +534,7 @@ def main():
         model = get_gemini_model()
 
         # 2. Fetch random article from sitemap
-        title, topic, full_text, article_url, featured_image, posted_urls = fetch_random_article()
+        title, topic, full_text, article_url, featured_image = fetch_random_article()
 
         # 3. Generate LinkedIn post text (with formula)
         post_text = generate_linkedin_post(title, topic, full_text, article_url, model)
@@ -550,6 +546,12 @@ def main():
         print("\n========== GENERATED POST ==========")
         print(post_text)
         print("====================================\n")
+
+        # Final sanity check: a complete post should end with the hashtags line.
+        # If it doesn't, the generation was likely truncated despite the retry —
+        # flag it loudly in logs so it's easy to spot in CI.
+        if "#" not in post_text.strip().splitlines()[-1]:
+            print("WARNING: Post does not appear to end with a hashtags line — it may be incomplete/truncated.")
 
         if featured_image:
             print(f"Featured Image: {featured_image}")
@@ -589,12 +591,8 @@ def main():
 
         # 6. Publish post
         success = create_linkedin_post(LINKEDIN_ACCESS_TOKEN, LINKEDIN_COMPANY_ID, post_text, image_urn)
-
-        # 7. Record to database if successfully posted
         if success:
-            posted_urls.append(article_url)
-            with open(DB_FILE, "w") as f:
-                json.dump(posted_urls, f, indent=2)
+            print("Post published successfully.")
             print("[Database] Saved post URL to LinkedIn database.")
 
     except Exception as e:
