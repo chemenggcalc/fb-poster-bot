@@ -352,5 +352,10 @@
     "articleUrl": "https://chemenggcalc.com/ponchon-savarit-diagram-calculator-distillation/",
     "postId": "671765686009391_122187236252796471",
     "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-07-02T19:02:26.322Z",
+    "status": "error",
+    "message": "Request failed with status code 403"
   }
 ]
