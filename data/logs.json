@@ -362,5 +362,13 @@
     "timestamp": "2026-07-03T18:50:47.129Z",
     "status": "error",
     "message": "Request failed with status code 403"
+  },
+  {
+    "timestamp": "2026-07-04T18:41:58.286Z",
+    "status": "success",
+    "articleTitle": "Centrifugal Pump Sizing Calculation - TDH, NPSHa vs Flow Rate curve & Power Required",
+    "articleUrl": "https://chemenggcalc.com/centrifugal-pump-sizing-calculation/",
+    "postId": "671765686009391_122187522002796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
