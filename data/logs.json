@@ -399,5 +399,10 @@
     "articleUrl": "https://chemenggcalc.com/centrifugal-pump-sizing-calculation/",
     "postId": "671765686009391_122187953798796471",
     "message": "Post successfully published to Facebook Page."
+  },
+  {
+    "timestamp": "2026-07-09T19:12:30.239Z",
+    "status": "error",
+    "message": "{\"error\":{\"code\":404,\"message\":\"This model models/gemini-2.5-flash is no longer available. Please update your code to use a newer model for the latest features and improvements.\",\"status\":\"NOT_FOUND\"}}"
   }
 ]
