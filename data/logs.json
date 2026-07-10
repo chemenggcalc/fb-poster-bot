@@ -404,5 +404,13 @@
     "timestamp": "2026-07-09T19:12:30.239Z",
     "status": "error",
     "message": "{\"error\":{\"code\":404,\"message\":\"This model models/gemini-2.5-flash is no longer available. Please update your code to use a newer model for the latest features and improvements.\",\"status\":\"NOT_FOUND\"}}"
+  },
+  {
+    "timestamp": "2026-07-10T19:08:47.782Z",
+    "status": "success",
+    "articleTitle": "Water Density & Specific Weight Calculation - Variation with temperature and Pressure",
+    "articleUrl": "https://chemenggcalc.com/water-density-specific-weight-calculator/",
+    "postId": "671765686009391_122188177550796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
