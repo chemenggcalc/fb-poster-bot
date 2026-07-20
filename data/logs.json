@@ -481,5 +481,13 @@
     "timestamp": "2026-07-19T18:38:56.338Z",
     "status": "error",
     "message": ""
+  },
+  {
+    "timestamp": "2026-07-20T19:17:02.756Z",
+    "status": "success",
+    "articleTitle": "Personal Carbon Footprint Calculator - Track your CO2 Emissions",
+    "articleUrl": "https://chemenggcalc.com/carbon-footprint-calculator-co2-emission/",
+    "postId": "671765686009391_122189180798796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
