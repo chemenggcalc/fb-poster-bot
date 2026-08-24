@@ -741,5 +741,13 @@
     "timestamp": "2026-08-23T17:56:35.258Z",
     "status": "error",
     "message": ""
+  },
+  {
+    "timestamp": "2026-08-24T18:04:08.895Z",
+    "status": "success",
+    "articleTitle": "Steam Table Calculator based on IAPWS-IF97 Properties - All 5 Regions Included",
+    "articleUrl": "https://chemenggcalc.com/steam-table-calculator-iapws-if97-properties/",
+    "postId": "671765686009391_122192741408796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
