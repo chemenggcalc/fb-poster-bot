@@ -1035,5 +1035,13 @@
     "timestamp": "2026-10-01T22:00:18.508Z",
     "status": "error",
     "message": "{\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+  },
+  {
+    "timestamp": "2026-10-02T21:26:37.752Z",
+    "status": "success",
+    "articleTitle": "Personal Carbon Footprint Calculator - Track your CO2 Emissions",
+    "articleUrl": "https://chemenggcalc.com/carbon-footprint-calculator-co2-emission/",
+    "postId": "671765686009391_122196840056796471",
+    "message": "Post successfully published to Facebook Page."
   }
 ]
